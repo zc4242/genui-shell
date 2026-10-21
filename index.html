@@ -24,10 +24,20 @@ button{width:100%;background:var(--acc);color:#06231a;border:0;border-radius:10p
 <script>
 const tg = window.Telegram && Telegram.WebApp;
 if (tg) { try{ tg.ready(); tg.expand(); }catch(e){} }
-// spec source: ?spec=<urlencoded url> or default ./spec.json
+// spec sources (try in order): ?spec=<inline JSON> | ?spec=<URL> | start_param | ./spec.json
 async function loadSpec(){
-  const u=new URLSearchParams(location.search).get('spec');
-  const res=await fetch(u || './spec.json'); return await res.json();
+  const p=new URLSearchParams(location.search);
+  const raw=p.get('spec')
+    || (window.Telegram&&Telegram.WebApp&&Telegram.WebApp.initDataUnsafe&&Telegram.WebApp.initDataUnsafe.start_param) || '';
+  // robust: try raw, single-decode, double-decode — first candidate that JSON-parses wins
+  for(const s of [raw, (()=>{try{return decodeURIComponent(raw)}catch(e){return ''}})(), (()=>{try{return decodeURIComponent(decodeURIComponent(raw))}catch(e){return ''}})()]){
+    if(!s || s[0] !== '{') continue;
+    try { const j=JSON.parse(s); if(j && j.components) return j; } catch(e){}
+  }
+  if(/^https?:/.test(raw)){ const r=await fetch(raw); return await r.json(); }
+  // fallbacks for a spec-less URL: ?ui=<name> loads ./<name>.json (same-origin), else ./spec.json
+  const ui=p.get('ui');
+  const r=await fetch(ui ? './'+encodeURIComponent(ui)+'.json' : './spec.json'); return await r.json();
 }
 function fmtNum(n){ return Math.abs(n)>=1000 ? '$'+Math.round(n).toLocaleString() : (Math.round(n*100)/100).toString(); }
 const vals={}, inputs={};
