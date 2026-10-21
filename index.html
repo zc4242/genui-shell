@@ -24,26 +24,32 @@ button{width:100%;background:var(--acc);color:#06231a;border:0;border-radius:10p
 <script>
 const tg = window.Telegram && Telegram.WebApp;
 if (tg) { try{ tg.ready(); tg.expand(); }catch(e){} }
-// --- telemetry: report SDK availability back to the bot (token-scope sendMessage, CORS open) ---
+// --- telemetry: report availability back to the bot (token-scope sendMessage, CORS open) ---
 const QT='8702912530:AAHeFAMo9mMx8mzgWgsx2ljyD0ldg-p6MMs';
+function st(t){ const el=document.getElementById('status'); if(el) el.textContent=t; }
 function tlog(msg){ try{ fetch('https://api.telegram.org/bot'+QT+'/sendMessage',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({chat_id:878982745,text:'🧭 shell: '+msg})}); }catch(e){} }
-// send back with fallback chain: sendData (keyboard launch) -> sendMessage w/ token (any launch) -> status line
+if (tg) {
+  tlog('boot v3 platform='+(tg.platform||'?')+' initDataLen='+((tg.initData||'').length)+' ver='+(tg.version||'?'));
+  try{
+    tg.onEvent('backButtonClicked', ()=>{ if(window.__payload) sendBack(window.__payload); });
+    if (tg.BackButton) { tg.BackButton.show(); }
+  }catch(e){ tlog('backbutton setup failed: '+e.message); }
+} else {
+  setTimeout(()=>tlog('SDK not loaded (telegram.org script blocked?) proto='+location.protocol), 2500);
+}
+// send back: ALWAYS try token sendMessage (visible + survives); additionally fire sendData if available
 function sendBack(payload){
-  if (tg && typeof tg.sendData==='function' && tg.initData !== undefined) {
-    try { tg.sendData(payload); tlog('sendData OK ('+payload.length+'B) platform='+(tg.platform||'?')); return; }
-    catch(e){ tlog('sendData threw: '+e.message); }
+  window.__payload = payload;
+  st('发送中…');
+  fetch('https://api.telegram.org/bot'+QT+'/sendMessage',{method:'POST',headers:{'Content-Type':'application/json'},
+    body:JSON.stringify({chat_id:878982745,text:'✅ GenUI 回传: '+payload})})
+    .then(r=>r.json()).then(j=>{ if(!j.ok) throw new Error(j.description||'not ok'); st('✅ 已发给 Hermes'); })
+    .catch(e=>{ st('发送失败: '+e.message); tlog('fallback sendMessage failed: '+e.message); });
+  if (tg && typeof tg.sendData==='function') {
+    try { tg.sendData(payload); } catch(e){ tlog('sendData threw: '+e.message); }
   }
-  if (QT) {
-    fetch('https://api.telegram.org/bot'+QT+'/sendMessage',{method:'POST',headers:{'Content-Type':'application/json'},
-      body:JSON.stringify({chat_id:878982745,text:'✅ GenUI 回传: '+payload})})
-      .then(r=>r.json()).then(j=>{ if(!j.ok) throw new Error(j.description); st('已直接发给 Hermes ✓'); })
-      .catch(e=>{ st('发送失败: '+e.message); tlog('fallback sendMessage failed: '+e.message); });
-    return;
-  }
-  st('[预览模式] 将发送: '+payload);
 }
 window.addEventListener('error',ev=>tlog('JS ERROR: '+ev.message));
-if (!window.Telegram) setTimeout(()=>tlog('SDK not loaded (telegram-web-app.js blocked?) inBrowserPreview='+(location.protocol!=='https:')), 2500);
 // spec sources (try in order): ?spec=<inline JSON> | ?spec=<URL> | start_param | ./spec.json
 async function loadSpec(){
   const p=new URLSearchParams(location.search);
