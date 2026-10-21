@@ -111,7 +111,6 @@ function render(spec){
     card1.append(lab,inp); inputs[id]=inp;
   });
   root.append(card1);
-  sliders.forEach((s,i)=>{const f=new Function('p','r','y','m',...Object.keys(vals).filter(k=>!['p','r','y','m'].includes(k)),'with(this){'+(c.formula||'0')+'}');});
   for(const c of spec.components){
     if(c.type==='select'){const d=document.createElement('div');d.className='card';
       const lab=document.createElement('label');lab.textContent=c.label||c.id;d.append(lab);
