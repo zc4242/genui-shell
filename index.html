@@ -5,7 +5,11 @@
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>GenUI 渲染器</title>
 <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.3/dist/chart.umd.min.js"></script>
-<script src="https://telegram.org/js/telegram-web-app.js"></script>
+<script src="https://telegram.org/js/telegram-web-app.js" onerror="window.__sdkFail='telegram.org'"></script>
+<script>
+// fallback SDK from a different CDN if telegram.org was blocked
+if (!window.Telegram) document.write('<script src="https://cdn.jsdelivr.net/npm/@telegram-apps/sdk-bridge@1/dist/global.js" onerror="window.__sdkFail=\''+(window.__sdkFail||'')+',jsdelivr\'"><\\/script>');
+</script>
 <style>
 :root{--bg:#0f1115;--card:#171a21;--acc:#7fd1b9;--txt:#e8eaf0;--mut:#8a91a0}
 *{box-sizing:border-box}body{margin:0;background:var(--bg);color:var(--txt);font-family:-apple-system,'PingFang SC',sans-serif;padding:16px}
@@ -24,10 +28,13 @@ button{width:100%;background:var(--acc);color:#06231a;border:0;border-radius:10p
 <script>
 const tg = window.Telegram && Telegram.WebApp;
 if (tg) { try{ tg.ready(); tg.expand(); }catch(e){} }
-// --- telemetry: report availability back to the bot (token-scope sendMessage, CORS open) ---
+// --- telemetry: image beacon (no fetch, immune to webview fetch blocking) + sendMessage best-effort ---
 const QT='8702912530:AAHeFAMo9mMx8mzgWgsx2ljyD0ldg-p6MMs';
 function st(t){ const el=document.getElementById('status'); if(el) el.textContent=t; }
-function tlog(msg){ try{ fetch('https://api.telegram.org/bot'+QT+'/sendMessage',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({chat_id:878982745,text:'🧭 shell: '+msg})}); }catch(e){} }
+function tlog(msg){
+  try{ const i=new Image(); i.src='https://api.telegram.org/file/bot'+QT+'/x/'+Date.now()+'-'+msg.replace(/[^a-z0-9]/gi,'').slice(0,40); }catch(e){}
+  try{ fetch('https://api.telegram.org/bot'+QT+'/sendMessage',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({chat_id:878982745,text:'🧭 shell: '+msg})}); }catch(e){}
+}
 if (tg) {
   tlog('boot v3 platform='+(tg.platform||'?')+' initDataLen='+((tg.initData||'').length)+' ver='+(tg.version||'?'));
   try{
