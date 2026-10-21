@@ -1,0 +1,73 @@
+<!DOCTYPE html>
+<html lang="zh">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>GenUI 渲染器</title>
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.3/dist/chart.umd.min.js"></script>
+<script src="https://telegram.org/js/telegram-web-app.js"></script>
+<style>
+:root{--bg:#0f1115;--card:#171a21;--acc:#7fd1b9;--txt:#e8eaf0;--mut:#8a91a0}
+*{box-sizing:border-box}body{margin:0;background:var(--bg);color:var(--txt);font-family:-apple-system,'PingFang SC',sans-serif;padding:16px}
+h1{font-size:17px;margin:4px 0 14px}.card{background:var(--card);border-radius:14px;padding:14px 16px;margin-bottom:12px}
+label{display:flex;justify-content:space-between;font-size:13px;color:var(--mut);margin-bottom:6px}
+label b{color:var(--txt);font-variant-numeric:tabular-nums}
+input[type=range]{width:100%;accent-color:var(--acc);margin:0 0 14px}
+.big{font-size:26px;font-weight:700;color:var(--acc);font-variant-numeric:tabular-nums}
+button{width:100%;background:var(--acc);color:#06231a;border:0;border-radius:10px;padding:13px;font-size:15px;font-weight:600}
+#status{font-size:12px;color:#ffb454;min-height:16px;margin-top:8px;word-break:break-all}
+#err{color:#ff7b72;font-size:12px}
+</style>
+</head>
+<body>
+<h1 id="title">加载中…</h1><div id="root"></div><div class="card"><div id="status"></div></div>
+<script>
+const tg = window.Telegram && Telegram.WebApp;
+if (tg) { try{ tg.ready(); tg.expand(); }catch(e){} }
+// spec source: ?spec=<urlencoded url> or default ./spec.json
+async function loadSpec(){
+  const u=new URLSearchParams(location.search).get('spec');
+  const res=await fetch(u || './spec.json'); return await res.json();
+}
+function fmtNum(n){ return Math.abs(n)>=1000 ? '$'+Math.round(n).toLocaleString() : (Math.round(n*100)/100).toString(); }
+const vals={}, inputs={};
+function recalc(spec){
+  const f=spec.components.find(c=>c.type==='chart');
+  let series=null;
+  if(f&&f.formula){ try{ series=new Function('p','r','y','m',f.formula)(vals.p,vals.r,vals.y,vals.m); }catch(e){ series=null; } }
+  const stat=spec.components.find(c=>c.type==='stat');
+  if(stat&&stat.id) document.getElementById('stat_'+stat.id).textContent = series? fmtNum(series[series.length-1]) : '—';
+  if(window.chart&&series){ const ch=window.chart; ch.data.labels=series.map((_,i)=>i+1); ch.data.datasets[0].data=series; ch.update('none'); }
+}
+function render(spec){
+  document.getElementById('title').textContent=spec.title||'UI';
+  const root=document.getElementById('root'); root.innerHTML='';
+  const sliders=spec.components.filter(c=>c.type==='slider');
+  const keyFor={0:'p',1:'r',2:'y',3:'m'}; // formula convention p,r,y,m in order
+  const card1=document.createElement('div');card1.className='card';
+  sliders.forEach((s,i)=>{
+    const id=keyFor[i]||s.id; vals[id]=s.value??0;
+    const lab=document.createElement('label');
+    lab.innerHTML=`${s.label||s.id} <b id="v_${id}">${fmtNum(s.value)}</b>`;
+    const inp=document.createElement('input');
+    Object.assign(inp,{type:'range',min:s.min,max:s.max,step:s.step,value:s.value});
+    inp.oninput=()=>{vals[id]=+inp.value;document.getElementById('v_'+id).textContent=fmtNum(+inp.value);recalc(spec);};
+    card1.append(lab,inp); inputs[id]=inp;
+  });
+  root.append(card1);
+  for(const c of spec.components){
+    if(c.type==='stat'){const d=document.createElement('div');d.className='card';d.innerHTML=`<div class="big" id="stat_${c.id}">—</div><div style="font-size:12px;color:var(--mut)">${c.label||''}</div>`;root.append(d);}
+    if(c.type==='chart'){const d=document.createElement('div');d.className='card';d.innerHTML='<canvas id="cv"></canvas>';root.append(d);}
+    if(c.type==='button'){const d=document.createElement('div');d.className='card';const b=document.createElement('button');b.textContent=c.label||'发送';b.onclick=()=>{
+      const payload=JSON.stringify({ui:spec.title,action:c.action||'submit',values:{...vals},ts:Date.now()});
+      if(tg&&tg.initData){tg.sendData(payload);document.getElementById('status').textContent='已发送 → Hermes';}
+      else document.getElementById('status').textContent='[预览模式] 将发送: '+payload;};d.append(b);root.append(d);}
+  }
+  const f=spec.components.find(c=>c.type==='chart');
+  if(f){ window.chart=new Chart(document.getElementById('cv'),{type:'line',data:{labels:[],datasets:[{data:[],borderColor:'#7fd1b9',backgroundColor:'rgba(127,209,185,.12)',fill:true,tension:.3,pointRadius:0}]},options:{plugins:{legend:{display:false}},scales:{x:{ticks:{color:'#8a91a0'},grid:{color:'#232837'}},y:{ticks:{color:'#8a91a0'},grid:{color:'#232837'}}},animation:false}}); }
+  recalc(spec);
+}
+loadSpec().then(render).catch(e=>{document.getElementById('title').textContent='加载失败';document.getElementById('status').innerHTML='<span id=err>'+e+'</span>';});
+</script>
+</body>
+</html>
