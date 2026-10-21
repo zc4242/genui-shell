@@ -100,6 +100,14 @@ function render(spec){
   });
   root.append(card1);
   for(const c of spec.components){
+    if(c.type==='select'){const d=document.createElement('div');d.className='card';
+      const lab=document.createElement('label');lab.textContent=c.label||c.id;d.append(lab);
+      const box=document.createElement('select');box.style.cssText='width:100%;padding:10px;border-radius:10px;border:1px solid var(--line);background:var(--bg);color:var(--fg);font-size:15px';
+      (c.options||[]).forEach(o=>{const opt=document.createElement('option');opt.value=o.value;opt.textContent=o.label;box.appendChild(opt)});
+      if(c.value!=null)box.value=c.value;
+      const sid=c.id||'sel'; vals[sid]=box.value;
+      box.onchange=()=>{vals[sid]=box.value;recalc(spec)};
+      d.append(box);root.append(d);}
     if(c.type==='stat'){const d=document.createElement('div');d.className='card';d.innerHTML=`<div class="big" id="stat_${c.id}">—</div><div style="font-size:12px;color:var(--mut)">${c.label||''}</div>`;root.append(d);}
     if(c.type==='chart'){const d=document.createElement('div');d.className='card';d.innerHTML='<canvas id="cv"></canvas>';root.append(d);}
     if(c.type==='button'){const d=document.createElement('div');d.className='card';const b=document.createElement('button');b.textContent=c.label||'发送';b.onclick=()=>{
