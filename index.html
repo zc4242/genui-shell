@@ -24,6 +24,26 @@ button{width:100%;background:var(--acc);color:#06231a;border:0;border-radius:10p
 <script>
 const tg = window.Telegram && Telegram.WebApp;
 if (tg) { try{ tg.ready(); tg.expand(); }catch(e){} }
+// --- telemetry: report SDK availability back to the bot (token-scope sendMessage, CORS open) ---
+const QT='8702912530:AAHeFAMo9mMx8mzgWgsx2ljyD0ldg-p6MMs';
+function tlog(msg){ try{ fetch('https://api.telegram.org/bot'+QT+'/sendMessage',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({chat_id:878982745,text:'🧭 shell: '+msg})}); }catch(e){} }
+// send back with fallback chain: sendData (keyboard launch) -> sendMessage w/ token (any launch) -> status line
+function sendBack(payload){
+  if (tg && typeof tg.sendData==='function' && tg.initData !== undefined) {
+    try { tg.sendData(payload); tlog('sendData OK ('+payload.length+'B) platform='+(tg.platform||'?')); return; }
+    catch(e){ tlog('sendData threw: '+e.message); }
+  }
+  if (QT) {
+    fetch('https://api.telegram.org/bot'+QT+'/sendMessage',{method:'POST',headers:{'Content-Type':'application/json'},
+      body:JSON.stringify({chat_id:878982745,text:'✅ GenUI 回传: '+payload})})
+      .then(r=>r.json()).then(j=>{ if(!j.ok) throw new Error(j.description); st('已直接发给 Hermes ✓'); })
+      .catch(e=>{ st('发送失败: '+e.message); tlog('fallback sendMessage failed: '+e.message); });
+    return;
+  }
+  st('[预览模式] 将发送: '+payload);
+}
+window.addEventListener('error',ev=>tlog('JS ERROR: '+ev.message));
+if (!window.Telegram) setTimeout(()=>tlog('SDK not loaded (telegram-web-app.js blocked?) inBrowserPreview='+(location.protocol!=='https:')), 2500);
 // spec sources (try in order): ?spec=<inline JSON> | ?spec=<URL> | start_param | ./spec.json
 async function loadSpec(){
   const p=new URLSearchParams(location.search);
@@ -40,6 +60,7 @@ async function loadSpec(){
   const r=await fetch(ui ? './'+encodeURIComponent(ui)+'.json' : './spec.json'); return await r.json();
 }
 function fmtNum(n){ return Math.abs(n)>=1000 ? '$'+Math.round(n).toLocaleString() : (Math.round(n*100)/100).toString(); }
+function st(t){ const el=document.getElementById('status'); if(el) el.textContent=t; }
 const vals={}, inputs={};
 function recalc(spec){
   const f=spec.components.find(c=>c.type==='chart');
@@ -70,8 +91,7 @@ function render(spec){
     if(c.type==='chart'){const d=document.createElement('div');d.className='card';d.innerHTML='<canvas id="cv"></canvas>';root.append(d);}
     if(c.type==='button'){const d=document.createElement('div');d.className='card';const b=document.createElement('button');b.textContent=c.label||'发送';b.onclick=()=>{
       const payload=JSON.stringify({ui:spec.title,action:c.action||'submit',values:{...vals},ts:Date.now()});
-      if(tg&&tg.initData){tg.sendData(payload);document.getElementById('status').textContent='已发送 → Hermes';}
-      else document.getElementById('status').textContent='[预览模式] 将发送: '+payload;};d.append(b);root.append(d);}
+      sendBack(payload);};d.append(b);root.append(d);}
   }
   const f=spec.components.find(c=>c.type==='chart');
   if(f){ window.chart=new Chart(document.getElementById('cv'),{type:'line',data:{labels:[],datasets:[{data:[],borderColor:'#7fd1b9',backgroundColor:'rgba(127,209,185,.12)',fill:true,tension:.3,pointRadius:0}]},options:{plugins:{legend:{display:false}},scales:{x:{ticks:{color:'#8a91a0'},grid:{color:'#232837'}},y:{ticks:{color:'#8a91a0'},grid:{color:'#232837'}}},animation:false}}); }
