@@ -75,12 +75,24 @@ async function loadSpec(){
 function fmtNum(n){ return Math.abs(n)>=1000 ? '$'+Math.round(n).toLocaleString() : (Math.round(n*100)/100).toString(); }
 function st(t){ const el=document.getElementById('status'); if(el) el.textContent=t; }
 const vals={}, inputs={};
+function evalFormula(formula){
+  const f=String(formula).trim();
+  const body=/^\(?[\w,\s]*\)?\s*=>/.test(f) ? f.replace(/^\(?[\w,\s]*\)?\s*=>/,'') : 'return '+f;
+  const extras=Object.keys(vals).filter(k=>!['p','r','y','m'].includes(k));
+  const fn=new Function('with(vals){const {p,r,y,m,'+extras.join(',')+'}=vals;'+body+'}');
+  return fn();
+}
+function fmtMinutes(v){ const t=Math.round(v); return t<60 ? t+' 分钟' : (t/60).toFixed(1)+' 小时'; }
 function recalc(spec){
   const f=spec.components.find(c=>c.type==='chart');
   let series=null;
-  if(f&&f.formula){ try{ series=new Function('p','r','y','m',f.formula)(vals.p,vals.r,vals.y,vals.m); }catch(e){ series=null; } }
+  if(f&&f.formula){ try{ const s=evalFormula(f.formula); if(Array.isArray(s)) series=s; }catch(e){ st('chart公式错误: '+e.message); } }
   const stat=spec.components.find(c=>c.type==='stat');
-  if(stat&&stat.id) document.getElementById('stat_'+stat.id).textContent = series? fmtNum(series[series.length-1]) : '—';
+  if(stat&&stat.id){ const node=document.getElementById('stat_'+stat.id);
+    try{
+      if(stat.formula){ const v=evalFormula(stat.formula); node.textContent = stat.format==='minutes' ? fmtMinutes(v) : fmtNum(v); }
+      else node.textContent = series? fmtNum(series[series.length-1]) : '—';
+    }catch(e){ node.textContent='—'; st('stat公式错误: '+e.message); } }
   if(window.chart&&series){ const ch=window.chart; ch.data.labels=series.map((_,i)=>i+1); ch.data.datasets[0].data=series; ch.update('none'); }
 }
 function render(spec){
@@ -99,6 +111,7 @@ function render(spec){
     card1.append(lab,inp); inputs[id]=inp;
   });
   root.append(card1);
+  sliders.forEach((s,i)=>{const f=new Function('p','r','y','m',...Object.keys(vals).filter(k=>!['p','r','y','m'].includes(k)),'with(this){'+(c.formula||'0')+'}');});
   for(const c of spec.components){
     if(c.type==='select'){const d=document.createElement('div');d.className='card';
       const lab=document.createElement('label');lab.textContent=c.label||c.id;d.append(lab);
